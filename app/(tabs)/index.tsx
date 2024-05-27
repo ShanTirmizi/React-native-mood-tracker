@@ -1,11 +1,60 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet, Platform, View, Button } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { Link } from 'expo-router';
+import { FirestoreError, collection, doc, getDocs, addDoc } from "firebase/firestore"; 
+import { db } from '@/FirebaseConfig';
+import { useEffect, useState } from 'react';
+
+interface Mood {
+  id: string; // Firestore document ID
+  mood: 'good' | 'bad' | 'neutral'; // Assuming your moods have a 'name' field
+}
 
 export default function HomeScreen() {
+  const [moods, setMoods] = useState<Mood[]>([]);
+  const [selectedMood, setSelectedMood] = useState<Mood['mood'] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<FirestoreError | null>(null);
+
+  const handleMoodSelect = (mood: Mood['mood']) => {
+    setSelectedMood(mood);
+  };
+
+  const saveMood = async () => {
+    if (selectedMood) {
+      try {
+        await addDoc(collection(db, 'moodos'), { mood: selectedMood });
+        // add a toast here 
+        setSelectedMood(null);
+      } catch (error: any) {
+        console.error('Error adding document: ', error);
+        setError(error);
+      }
+    }
+  };
+
+  useEffect(() => {
+
+    const fetchMoods = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'moods'));
+        const moodData: Mood[] = [];
+        querySnapshot.forEach((doc) => {
+          moodData.push({ id: doc.id, mood: doc.data().mood });
+        });
+        setMoods(moodData);
+        
+      } catch (error: any) {
+        setError(error);
+      }
+    }
+    fetchMoods();
+  }, []);
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -31,21 +80,27 @@ export default function HomeScreen() {
         </ThemedText>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
+        <View>
+          {
+            loading ? <ThemedText>Loading...</ThemedText> :
+            error ? <ThemedText>Error: {error}</ThemedText> :
+            moods.length > 0 ? moods.map(mood => (
+              <ThemedText key={mood.id}>Mood: {mood.mood}</ThemedText>
+            )) : <ThemedText>No moods found</ThemedText>
+          }
+        </View>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+        <View>
+          <ThemedText type="subtitle">How are you feeling today?</ThemedText>
+          <Button title="Good" onPress={() => handleMoodSelect('good')} />
+          <Button title="Bad" onPress={() => handleMoodSelect('bad')} />
+          <Button title="Neutral" onPress={() => handleMoodSelect('neutral')} />
+
+          <Button title="Save Mood" onPress={saveMood} disabled={!selectedMood} />
+        </View>
       </ThemedView>
+      <Link href='/register'>Register</Link>
     </ParallaxScrollView>
   );
 }
